@@ -29,7 +29,8 @@ app.use(
     onProxyReq: (proxyReq, req, res) => {
       // ✅ Pass API key + headers for secured endpoints (like analytics)
      // proxyReq.setHeader('x-api-key', process.env.API_KEY);
-     proxyReq.setHeader('Authorization', `Bearer ${process.env.API_KEY}`);
+     //proxyReq.setHeader('Authorization', `Bearer ${process.env.API_KEY}`);
+     proxyReq.setHeader('Authorization', 'Bearer ' + process.env.API_KEY);
       proxyReq.setHeader('Content-Type', 'application/json');
       proxyReq.setHeader('Accept', 'application/json');
       console.log(`🔁 Proxying API: ${req.method} ${req.originalUrl}`);
