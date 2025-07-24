@@ -46,18 +46,25 @@ app.use(
   })
 );
 
-// ✅ Proxy for /proxy-events
+// ✅ FIXED: Proxy for /proxy-events (now supports POST body correctly)
 app.use(
   '/proxy-events',
   createProxyMiddleware({
     target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
     changeOrigin: true,
-    pathRewrite: { '^/proxy-events': '/api/events' },
+    pathRewrite: { '^/proxy-events': '/api/proxy-events' },
     onProxyReq: (proxyReq, req, res) => {
       const clientAuth = req.headers['authorization'];
       const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
       proxyReq.setHeader('Authorization', authHeader);
       proxyReq.setHeader('Content-Type', 'application/json');
+
+      // ✅ Forward the request body manually for POST
+      if (req.body) {
+        const bodyData = JSON.stringify(req.body);
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        proxyReq.write(bodyData);
+      }
     },
     onError: (err, req, res) => {
       console.error('❌ proxy-events Error:', err.message);
@@ -99,4 +106,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Proxy Server running on http://localhost:${PORT}`);
 });
-
