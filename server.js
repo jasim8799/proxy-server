@@ -27,11 +27,15 @@ app.use(
     changeOrigin: true,
     pathRewrite: { '^/proxy': '' },
     onProxyReq: (proxyReq, req, res) => {
-      // 🔐 Forward client's Authorization if present, else use API_KEY
-      const clientAuth = req.headers['authorization'];
-      const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
-      proxyReq.setHeader('Authorization', authHeader);
-      
+      // ✅ Bypass Authorization for specific public endpoint
+      const bypassAuth = req.originalUrl.includes('/proxy-events');
+
+      if (!bypassAuth) {
+        const clientAuth = req.headers['authorization'];
+        const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
+        proxyReq.setHeader('Authorization', authHeader);
+      }
+
       // Common headers
       proxyReq.setHeader('Content-Type', 'application/json');
       proxyReq.setHeader('Accept', 'application/json');
