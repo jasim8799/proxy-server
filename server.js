@@ -7,11 +7,13 @@ const getRawBody = require('raw-body');
 require('dotenv').config();
 
 const app = express();
+
+// --- Middleware ---
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// --- Raw Body Middleware for POST/PUT (needed for webhooks) ---
+// --- Raw Body Middleware for POST/PUT ---
 app.use((req, res, next) => {
   if (req.method === 'POST' || req.method === 'PUT') {
     getRawBody(req, {
@@ -35,7 +37,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// ✅ Proxy for /proxy/api/*
+// ✅ Proxy for all regular API routes: /proxy/api/*
 app.use(
   '/proxy/api',
   createProxyMiddleware({
@@ -56,7 +58,7 @@ app.use(
   })
 );
 
-// ✅ Proxy for /proxy-events
+// ✅ Proxy for posting events securely: /proxy-events
 app.use(
   '/proxy-events',
   createProxyMiddleware({
@@ -69,7 +71,7 @@ app.use(
       proxyReq.setHeader('Authorization', authHeader);
       proxyReq.setHeader('Content-Type', 'application/json');
 
-      // 🛠️ Inject raw body manually
+      // 🔄 Inject raw body if present
       if (req.rawBody) {
         proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody));
         proxyReq.write(req.rawBody);
@@ -86,7 +88,7 @@ app.use(
   })
 );
 
-// Optional: Proxy for videos
+// ✅ Optional: Proxy for streaming videos
 app.use(
   '/proxy/video',
   createProxyMiddleware({
@@ -105,13 +107,14 @@ app.use(
   })
 );
 
-// Health Check
+// ✅ Health Check
 app.get('/', (req, res) => {
   res.send('🔒 Proxy Server is running securely.');
 });
 
-// Start Server
+// ✅ Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Proxy Server running on http://localhost:${PORT}`);
 });
+
