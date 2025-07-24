@@ -19,7 +19,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// --- Proxy to Real API (Render backend) ---
+// ✅ Proxy for /proxy/api (general API proxy)
 app.use(
   '/proxy/api',
   createProxyMiddleware({
@@ -29,7 +29,6 @@ app.use(
       '^/proxy/api': '/api',
     },
     onProxyReq: (proxyReq, req, res) => {
-      // Skip auth for /proxy-events
       const bypassAuth = req.originalUrl.includes('/proxy-events');
 
       if (!bypassAuth) {
@@ -48,6 +47,30 @@ app.use(
       if (!res.headersSent) {
         res.status(504).json({ error: 'Proxy error', message: err.message });
       }
+    },
+    timeout: 60000,
+    proxyTimeout: 60000,
+  })
+);
+
+// ✅ Proxy for /proxy-events (for posting events)
+app.use(
+  '/proxy-events',
+  createProxyMiddleware({
+    target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
+    changeOrigin: true,
+    pathRewrite: {
+      '^/proxy-events': '/api/proxy-events',
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      const clientAuth = req.headers['authorization'];
+      const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
+      proxyReq.setHeader('Authorization', authHeader);
+      proxyReq.setHeader('Content-Type', 'application/json');
+    },
+    onError: (err, req, res) => {
+      console.error('❌ proxy-events Error:', err.message);
+      res.status(504).json({ error: 'Proxy-events failed', message: err.message });
     },
     timeout: 60000,
     proxyTimeout: 60000,
