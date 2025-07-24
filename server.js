@@ -3,103 +3,57 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const getRawBody = require('raw-body');
 require('dotenv').config();
 
 const app = express();
 
-// Security & Middleware
+// --- Security Middleware ---
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// 🧠 Raw Body Middleware for POST/PUT
-app.use((req, res, next) => {
-  if (req.method === 'POST' || req.method === 'PUT') {
-    getRawBody(req, {
-      length: req.headers['content-length'],
-      limit: '1mb',
-      encoding: 'utf-8',
-    }, function (err, string) {
-      if (err) return next(err);
-      req.rawBody = string;
-      next();
-    });
-  } else {
-    next();
-  }
-});
-
-// 🔐 Rate Limiting
+// --- Rate Limiting ---
 const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 100,
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // limit each IP to 100 requests per minute
 });
 app.use(limiter);
 
-// 🔁 General Proxy: /proxy/api/*
+// --- Proxy Real API (Render backend) ---
 app.use(
-  '/proxy/api',
+  '/proxy',
   createProxyMiddleware({
-    target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
+    target: process.env.REAL_API_URL, // Example: https://api-15hv.onrender.com
     changeOrigin: true,
-    pathRewrite: { '^/proxy/api': '/api' },
-    onProxyReq: (proxyReq, req) => {
-      const bypassAuth = req.originalUrl.includes('/proxy-events');
-      if (!bypassAuth) {
-        const clientAuth = req.headers['authorization'];
-        const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
-        proxyReq.setHeader('Authorization', authHeader);
-      }
+    pathRewrite: { '^/proxy': '' },
+    onProxyReq: (proxyReq, req, res) => {
+      // 🔁 Fix here: Set correct API key header
+      proxyReq.setHeader('x-api-key', process.env.API_KEY); // ✅ Required by auth.js
       proxyReq.setHeader('Content-Type', 'application/json');
-    },
-    timeout: 60000,
-    proxyTimeout: 60000,
-  })
-);
-
-// ⚙️ Event Proxy: /proxy-events → /api/proxy-events
-app.use(
-  '/proxy-events',
-  createProxyMiddleware({
-    target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
-    changeOrigin: true,
-    pathRewrite: { '^/proxy-events': '/api/proxy-events' },
-    onProxyReq: (proxyReq, req) => {
-      const clientAuth = req.headers['authorization'];
-      const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
-      proxyReq.setHeader('Authorization', authHeader);
-      proxyReq.setHeader('Content-Type', 'application/json');
-
-      // Inject raw body
-      if (req.rawBody) {
-        proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody));
-        proxyReq.write(req.rawBody);
-      }
+      proxyReq.setHeader('Accept', 'application/json');
+      console.log(`🔁 Proxying API: ${req.method} ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
-      console.error('❌ proxy-events Error:', err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal Server Error', message: err.message });
-      }
+      console.error('❌ API Proxy error:', err.message);
+      res.status(504).json({ error: 'API proxy server error', message: err.message });
     },
     timeout: 60000,
     proxyTimeout: 60000,
   })
 );
 
-// 🎥 Optional Video Proxy
+// --- Proxy Cloudflare Video ---
 app.use(
   '/proxy/video',
   createProxyMiddleware({
     target: 'https://videodelivery.net',
     changeOrigin: true,
     pathRewrite: { '^/proxy/video': '' },
-    onProxyReq: (proxyReq, req) => {
-      console.log(`🎥 Proxying Video: ${req.originalUrl}`);
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`🎥 Proxying Cloudflare video: ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
-      console.error('❌ Video Proxy Error:', err.message);
+      console.error('❌ Video Proxy error:', err.message);
       res.status(504).send('Video Proxy error.');
     },
     timeout: 60000,
@@ -107,15 +61,16 @@ app.use(
   })
 );
 
-// ✅ Health Check
+// --- Default Route ---
 app.get('/', (req, res) => {
   res.send('🔒 Proxy Server is running securely.');
 });
 
-// Start Server
+// --- Start Server ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Proxy Server running on http://localhost:${PORT}`);
+  console.log(`✅ Proxy Server running at http://localhost:${PORT}`);
 });
+
 
 
