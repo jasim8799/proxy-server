@@ -6,20 +6,36 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
 
 const app = express();
-
-// --- Middleware ---
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// --- Rate Limit ---
+// --- Body Capture Middleware (RAW Body Buffer for POST) ---
+const getRawBody = require('raw-body');
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT') {
+    getRawBody(req, {
+      length: req.headers['content-length'],
+      limit: '1mb',
+      encoding: 'utf-8',
+    }, function (err, string) {
+      if (err) return next(err);
+      req.rawBody = string;
+      next();
+    });
+  } else {
+    next();
+  }
+});
+
+// --- Rate Limiting ---
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
 });
 app.use(limiter);
 
-// ✅ Main API proxy
+// ✅ Main API Proxy (No Change)
 app.use(
   '/proxy/api',
   createProxyMiddleware({
@@ -35,18 +51,12 @@ app.use(
       }
       proxyReq.setHeader('Content-Type', 'application/json');
     },
-    onError: (err, req, res) => {
-      console.error('❌ Proxy API Error:', err.message);
-      if (!res.headersSent) {
-        res.status(504).json({ error: 'Proxy API error', message: err.message });
-      }
-    },
     timeout: 60000,
     proxyTimeout: 60000,
   })
 );
 
-// ✅ FIXED: Proxy for /proxy-events (now supports POST body correctly)
+// ✅ FINAL FIXED: Proxy for /proxy-events
 app.use(
   '/proxy-events',
   createProxyMiddleware({
@@ -59,11 +69,10 @@ app.use(
       proxyReq.setHeader('Authorization', authHeader);
       proxyReq.setHeader('Content-Type', 'application/json');
 
-      // ✅ Forward the request body manually for POST
-      if (req.body) {
-        const bodyData = JSON.stringify(req.body);
-        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-        proxyReq.write(bodyData);
+      // ✅ Inject raw body if present
+      if (req.rawBody) {
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody));
+        proxyReq.write(req.rawBody);
       }
     },
     onError: (err, req, res) => {
@@ -77,7 +86,7 @@ app.use(
   })
 );
 
-// Optional: Video proxy
+// Optional: Video Proxy (No Change)
 app.use(
   '/proxy/video',
   createProxyMiddleware({
