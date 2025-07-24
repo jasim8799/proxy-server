@@ -7,46 +7,38 @@ require('dotenv').config();
 
 const app = express();
 
-// --- Security Middleware ---
+// --- Middleware ---
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// --- Rate Limiting ---
+// --- Rate Limit ---
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
 });
 app.use(limiter);
 
-// ✅ Proxy for /proxy/api/* (used by Flutter app)
+// ✅ Main API proxy
 app.use(
   '/proxy/api',
   createProxyMiddleware({
     target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
     changeOrigin: true,
-    pathRewrite: {
-      '^/proxy/api': '/api',
-    },
+    pathRewrite: { '^/proxy/api': '/api' },
     onProxyReq: (proxyReq, req, res) => {
-      // Skip auth for /proxy-events
       const bypassAuth = req.originalUrl.includes('/proxy-events');
-
       if (!bypassAuth) {
         const clientAuth = req.headers['authorization'];
         const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
         proxyReq.setHeader('Authorization', authHeader);
       }
-
       proxyReq.setHeader('Content-Type', 'application/json');
-      proxyReq.setHeader('Accept', 'application/json');
-
-      console.log(`🔁 [${req.method}] Proxying ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
-      console.error('❌ Proxy Error:', err.message);
+      console.error('❌ Proxy API Error:', err.message);
       if (!res.headersSent) {
-        res.status(504).json({ error: 'Proxy error', message: err.message });
+        res.status(504).json({ error: 'Proxy API error', message: err.message });
       }
     },
     timeout: 60000,
@@ -54,24 +46,21 @@ app.use(
   })
 );
 
-// ✅ NEW: Proxy for POST /proxy-events (used by Admin Panel)
+// ✅ Proxy for /proxy-events
 app.use(
   '/proxy-events',
   createProxyMiddleware({
     target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
     changeOrigin: true,
-    pathRewrite: {
-      '^/proxy-events': '/api/proxy-events',
-    },
+    pathRewrite: { '^/proxy-events': '/api/events' },
     onProxyReq: (proxyReq, req, res) => {
       const clientAuth = req.headers['authorization'];
       const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
       proxyReq.setHeader('Authorization', authHeader);
       proxyReq.setHeader('Content-Type', 'application/json');
-      console.log(`📮 [${req.method}] Proxying /proxy-events → /api/proxy-events`);
     },
     onError: (err, req, res) => {
-      console.error('❌ /proxy-events Error:', err.message);
+      console.error('❌ proxy-events Error:', err.message);
       if (!res.headersSent) {
         res.status(504).json({ error: 'Proxy-events failed', message: err.message });
       }
@@ -81,7 +70,7 @@ app.use(
   })
 );
 
-// ✅ Optional: Cloudflare Video Proxy
+// Optional: Video proxy
 app.use(
   '/proxy/video',
   createProxyMiddleware({
@@ -100,13 +89,14 @@ app.use(
   })
 );
 
-// ✅ Health Check
+// Health check
 app.get('/', (req, res) => {
   res.send('🔒 Proxy Server is running securely.');
 });
 
-// ✅ Start Server
+// Start
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Proxy Server running at http://localhost:${PORT}`);
+  console.log(`✅ Proxy Server running on http://localhost:${PORT}`);
 });
+
