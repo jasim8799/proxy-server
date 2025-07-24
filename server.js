@@ -23,10 +23,13 @@ app.use(limiter);
 app.use(
   '/proxy/api',
   createProxyMiddleware({
-    target: process.env.REAL_API_URL, // e.g. https://api-15hv.onrender.com
+    target: process.env.REAL_API_URL || 'https://api-15hv.onrender.com',
     changeOrigin: true,
-    pathRewrite: { '^/proxy/api': '/api' },
+    pathRewrite: {
+      '^/proxy/api': '/api',
+    },
     onProxyReq: (proxyReq, req, res) => {
+      // Skip auth for /proxy-events
       const bypassAuth = req.originalUrl.includes('/proxy-events');
 
       if (!bypassAuth) {
@@ -38,18 +41,20 @@ app.use(
       proxyReq.setHeader('Content-Type', 'application/json');
       proxyReq.setHeader('Accept', 'application/json');
 
-      console.log(`🔁 Proxying: ${req.method} ${req.originalUrl}`);
+      console.log(`🔁 [${req.method}] Proxying ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
       console.error('❌ Proxy Error:', err.message);
-      res.status(504).json({ error: 'Proxy error', message: err.message });
+      if (!res.headersSent) {
+        res.status(504).json({ error: 'Proxy error', message: err.message });
+      }
     },
     timeout: 60000,
     proxyTimeout: 60000,
   })
 );
 
-// --- Proxy to Cloudflare Video (optional) ---
+// --- Optional Cloudflare Video Proxy ---
 app.use(
   '/proxy/video',
   createProxyMiddleware({
@@ -68,9 +73,9 @@ app.use(
   })
 );
 
-// --- Root Route ---
+// --- Health Check Route ---
 app.get('/', (req, res) => {
-  res.send('🔒 Proxy Server is up and secure.');
+  res.send('🔒 Proxy Server is running securely.');
 });
 
 // --- Start Server ---
