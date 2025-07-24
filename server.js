@@ -8,12 +8,12 @@ require('dotenv').config();
 
 const app = express();
 
-// --- Middleware ---
+// Security & Middleware
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// --- Raw Body Middleware for POST/PUT ---
+// 🧠 Raw Body Middleware for POST/PUT
 app.use((req, res, next) => {
   if (req.method === 'POST' || req.method === 'PUT') {
     getRawBody(req, {
@@ -30,14 +30,14 @@ app.use((req, res, next) => {
   }
 });
 
-// --- Rate Limiting ---
+// 🔐 Rate Limiting
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
 });
 app.use(limiter);
 
-// ✅ Proxy for all regular API routes: /proxy/api/*
+// 🔁 General Proxy: /proxy/api/*
 app.use(
   '/proxy/api',
   createProxyMiddleware({
@@ -58,7 +58,7 @@ app.use(
   })
 );
 
-// ✅ Proxy for posting events securely: /proxy-events
+// ⚙️ Event Proxy: /proxy-events → /api/proxy-events
 app.use(
   '/proxy-events',
   createProxyMiddleware({
@@ -71,7 +71,7 @@ app.use(
       proxyReq.setHeader('Authorization', authHeader);
       proxyReq.setHeader('Content-Type', 'application/json');
 
-      // 🔄 Inject raw body if present
+      // Inject raw body
       if (req.rawBody) {
         proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody));
         proxyReq.write(req.rawBody);
@@ -88,7 +88,7 @@ app.use(
   })
 );
 
-// ✅ Optional: Proxy for streaming videos
+// 🎥 Optional Video Proxy
 app.use(
   '/proxy/video',
   createProxyMiddleware({
@@ -112,9 +112,10 @@ app.get('/', (req, res) => {
   res.send('🔒 Proxy Server is running securely.');
 });
 
-// ✅ Start the server
+// Start Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Proxy Server running on http://localhost:${PORT}`);
 });
+
 
