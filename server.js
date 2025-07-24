@@ -19,15 +19,14 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// --- Proxy Real API (Render backend) ---
+// --- Proxy to Real API (Render backend) ---
 app.use(
-  '/proxy',
+  '/proxy/api',
   createProxyMiddleware({
-    target: process.env.REAL_API_URL, // Example: https://api-15hv.onrender.com
+    target: process.env.REAL_API_URL, // e.g. https://api-15hv.onrender.com
     changeOrigin: true,
-    pathRewrite: { '^/proxy': '' },
+    pathRewrite: { '^/proxy/api': '/api' },
     onProxyReq: (proxyReq, req, res) => {
-      // ✅ Bypass Authorization for specific public endpoint
       const bypassAuth = req.originalUrl.includes('/proxy-events');
 
       if (!bypassAuth) {
@@ -36,22 +35,21 @@ app.use(
         proxyReq.setHeader('Authorization', authHeader);
       }
 
-      // Common headers
       proxyReq.setHeader('Content-Type', 'application/json');
       proxyReq.setHeader('Accept', 'application/json');
 
-      console.log(`🔁 Proxying API: ${req.method} ${req.originalUrl}`);
+      console.log(`🔁 Proxying: ${req.method} ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
-      console.error('❌ API Proxy error:', err.message);
-      res.status(504).json({ error: 'API proxy server error', message: err.message });
+      console.error('❌ Proxy Error:', err.message);
+      res.status(504).json({ error: 'Proxy error', message: err.message });
     },
     timeout: 60000,
     proxyTimeout: 60000,
   })
 );
 
-// --- Proxy Cloudflare Video ---
+// --- Proxy to Cloudflare Video (optional) ---
 app.use(
   '/proxy/video',
   createProxyMiddleware({
@@ -59,10 +57,10 @@ app.use(
     changeOrigin: true,
     pathRewrite: { '^/proxy/video': '' },
     onProxyReq: (proxyReq, req, res) => {
-      console.log(`🎥 Proxying Cloudflare video: ${req.originalUrl}`);
+      console.log(`🎥 Proxying Video: ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
-      console.error('❌ Video Proxy error:', err.message);
+      console.error('❌ Video Proxy Error:', err.message);
       res.status(504).send('Video Proxy error.');
     },
     timeout: 60000,
@@ -70,9 +68,9 @@ app.use(
   })
 );
 
-// --- Default Route ---
+// --- Root Route ---
 app.get('/', (req, res) => {
-  res.send('🔒 Proxy Server is running securely.');
+  res.send('🔒 Proxy Server is up and secure.');
 });
 
 // --- Start Server ---
