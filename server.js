@@ -14,12 +14,12 @@ app.use(express.json());
 
 // --- Rate Limiting ---
 const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100, // limit each IP to 100 requests per minute
+  windowMs: 60 * 1000,
+  max: 100,
 });
 app.use(limiter);
 
-// ✅ Proxy for /proxy/api (general API proxy)
+// ✅ Proxy for /proxy/api/* (used by Flutter app)
 app.use(
   '/proxy/api',
   createProxyMiddleware({
@@ -29,6 +29,7 @@ app.use(
       '^/proxy/api': '/api',
     },
     onProxyReq: (proxyReq, req, res) => {
+      // Skip auth for /proxy-events
       const bypassAuth = req.originalUrl.includes('/proxy-events');
 
       if (!bypassAuth) {
@@ -53,7 +54,7 @@ app.use(
   })
 );
 
-// ✅ Proxy for /proxy-events (for posting events)
+// ✅ NEW: Proxy for POST /proxy-events (used by Admin Panel)
 app.use(
   '/proxy-events',
   createProxyMiddleware({
@@ -67,17 +68,20 @@ app.use(
       const authHeader = clientAuth || `Bearer ${process.env.API_KEY}`;
       proxyReq.setHeader('Authorization', authHeader);
       proxyReq.setHeader('Content-Type', 'application/json');
+      console.log(`📮 [${req.method}] Proxying /proxy-events → /api/proxy-events`);
     },
     onError: (err, req, res) => {
-      console.error('❌ proxy-events Error:', err.message);
-      res.status(504).json({ error: 'Proxy-events failed', message: err.message });
+      console.error('❌ /proxy-events Error:', err.message);
+      if (!res.headersSent) {
+        res.status(504).json({ error: 'Proxy-events failed', message: err.message });
+      }
     },
     timeout: 60000,
     proxyTimeout: 60000,
   })
 );
 
-// --- Optional Cloudflare Video Proxy ---
+// ✅ Optional: Cloudflare Video Proxy
 app.use(
   '/proxy/video',
   createProxyMiddleware({
@@ -96,12 +100,12 @@ app.use(
   })
 );
 
-// --- Health Check Route ---
+// ✅ Health Check
 app.get('/', (req, res) => {
   res.send('🔒 Proxy Server is running securely.');
 });
 
-// --- Start Server ---
+// ✅ Start Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Proxy Server running at http://localhost:${PORT}`);
