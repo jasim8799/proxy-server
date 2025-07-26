@@ -2,10 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression'); // ✅ Added
 const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
 
 const app = express();
+// --- Compression ---
+app.use(compression()); // ✅ Added
 
 // --- Security Middleware ---
 app.use(helmet());
