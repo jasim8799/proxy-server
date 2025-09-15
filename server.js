@@ -49,11 +49,25 @@ app.use(
 app.use(
   '/proxy/video',
   createProxyMiddleware({
-    target: 'https://videodelivery.net',
+    target: 'http://dummy', // dummy, will be overridden
     changeOrigin: true,
-    pathRewrite: { '^/proxy/video': '' },
+    selfHandleResponse: false,
+    router: function (req) {
+      const url = req.query.url || req.originalUrl;
+      if (!url) return 'https://cloudflare-default.com'; // fallback
+
+      if (url.includes('b-cdn.net') || url.includes('cloudflare')) {
+        return url; // Cloudflare URL
+      }
+      if (url.includes('wasabisys.com') || url.includes('wasabi')) {
+        return url; // Wasabi URL
+      }
+      return url; // fallback to original
+    },
     onProxyReq: (proxyReq, req, res) => {
-      console.log(`🎥 Proxying Cloudflare video: ${req.originalUrl}`);
+      proxyReq.setHeader('Accept', '*/*');
+      proxyReq.setHeader('User-Agent', 'Mozilla/5.0');
+      console.log(`🎥 Proxying video: ${req.originalUrl}`);
     },
     onError: (err, req, res) => {
       console.error('❌ Video Proxy error:', err.message);
